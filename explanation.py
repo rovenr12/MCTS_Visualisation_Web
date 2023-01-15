@@ -41,7 +41,6 @@ def get_feature_difference_count(df, base_action_name, action_lists, rel_tol=0.0
 
 
 def game_feature_difference_explanation(df):
-
     root_name = df[df['Parent_Name'] == 'None']['Name'][0]
     root_children = df[df['Parent_Name'] == root_name]['Name'].values
 
@@ -91,4 +90,33 @@ def get_root_children_list(df):
 if __name__ == '__main__':
     df = pd.read_csv("MCTS_test_0.csv", sep='\t')
     immediate, depth = game_feature_difference_explanation(df)
-    print(generate_immediate_dataframe(immediate))
+
+    table_df = {}
+
+    # {(node_name, change_name): {(feature, depth): change_count}}
+
+    for node, summary in immediate.items():
+        change_dict_higher = table_df.setdefault((node, "Higher"), {})
+        change_dict_same = table_df.setdefault((node, "Same"), {})
+        change_dict_lower = table_df.setdefault((node, "Lower"), {})
+
+        for feature, changes in summary.items():
+            change_dict_higher[(feature, 'Immediate')] = f"{changes['higher'] / 1 * 100:.2f}%"
+            change_dict_same[(feature, 'Immediate')] = f"{changes['same'] / 1 * 100:.2f}%"
+            change_dict_lower[(feature, 'Immediate')] = f"{changes['lower'] / 1 * 100:.2f}%"
+
+    for node, depth_summary in depth.items():
+        for depth, summary in depth_summary.items():
+            change_dict_higher = table_df.setdefault((node, "Higher"), {})
+            change_dict_same = table_df.setdefault((node, "Same"), {})
+            change_dict_lower = table_df.setdefault((node, "Lower"), {})
+
+            for feature, changes in summary.items():
+                count_sum = sum(changes.values())
+                change_dict_higher[(feature, depth)] = f"{changes['higher'] / count_sum * 100:.2f}%"
+                change_dict_same[(feature, depth)] = f"{changes['same'] / count_sum * 100:.2f}%"
+                change_dict_lower[(feature, depth)] = f"{changes['lower'] / count_sum * 100:.2f}%"
+
+
+    print(pd.DataFrame.from_dict(table_df))
+
