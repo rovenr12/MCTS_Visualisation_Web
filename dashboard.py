@@ -214,18 +214,23 @@ selected_node_info_card = html.Div(dbc.Card([
     ], class_name='py-3'),
     dbc.CardBody(select_node_info),
     dcc.Store(id='selected_node_custom_data')
-], className='h-100'), id='selected_node_info_card', hidden=True, className='my-2 shadow h-100')
+]), id='selected_node_info_card', hidden=True, className='my-2 shadow')
 
 ####################################################
 # Explanation Layout
 ####################################################
+# Game Feature Explanation
+game_feature_explanation = dbc.Card([
+    dbc.CardHeader(html.P("Game Features", className='m-0 fw-bold text-center text-primary'), class_name='py-3'),
+    dbc.CardBody(id='game_feature_explanation'),
+], class_name='my-2')
+
 explanation_card = html.Div(dbc.Card([
     dbc.CardHeader(html.H4("Root Action Explanation", className='m-0 fw-bold text-center text-primary'),
                    class_name='py-3'),
     dbc.CardBody([
-        dbc.Label("Node", html_for='root_children_actions'),
-        dbc.Select(options=create_select_options([0, 1, 2]), id='root_children_actions', className='w-50')
-    ])
+        game_feature_explanation
+    ], style={'height': '700px', 'overflow-x': 'hidden', 'overflow-y': 'auto'})
 ], className='h-100'), id='root_action_explanation', hidden=True, className='my-2 shadow h-100')
 
 ####################################################
@@ -239,8 +244,10 @@ app.layout = html.Div([
             dbc.Col(tree_visualisation, lg='9', md='12')
         ], class_name='g-3 mb-4 px-3'),
         dbc.Row([
-            dbc.Col(selected_node_info_card, lg='7', md='12'),
-            dbc.Col(explanation_card, lg='5', md='12')
+            dbc.Col(selected_node_info_card, lg='12', md='12'),
+        ], class_name='g-3 mb-4 px-3'),
+        dbc.Row([
+            dbc.Col(explanation_card, lg='12', md='12')
         ], class_name='g-3 mb-4 px-3')
     ])
 ], style={"overflow-x": "hidden", "min-height": "100vh"}, className="bg-light")
@@ -250,15 +257,14 @@ app.layout = html.Div([
 # Explanation Callback
 ####################################################
 @app.callback(
-    Output(component_id='root_children_actions', component_property='options'),
-    Output(component_id='root_children_actions', component_property='value'),
+    Output(component_id='game_feature_explanation', component_property='children'),
     Input(component_id='root_action_explanation', component_property='hidden'),
     Input(component_id='visit_threshold', component_property='value'),
     State(component_id='dataframe', component_property='data')
 )
-def update_root_children_action_list(hidden, visit_threshold, df):
+def update_game_feature_explanation(hidden, visit_threshold, df):
     if hidden:
-        return [], None
+        return []
 
     df = pd.read_json(df)
     if visit_threshold:
@@ -266,9 +272,24 @@ def update_root_children_action_list(hidden, visit_threshold, df):
 
     root_action_list = explanation.get_root_children_list(df)
     if root_action_list:
-        return create_select_options(root_action_list), root_action_list[0]
+        table_df, maximum_depth = explanation.generate_game_feature_explanation_df(df)
+        maximum_depth += 1
+        table = dbc.Table.from_dataframe(table_df, bordered=True, hover=True, index=True,
+                                         responsive=True, class_name='align-middle text-center')
+        tbody = table.children[1]
+        tbody.className = " table-group-divider"
 
-    return [], None
+        visited_feature_name = []
+
+        for idx, tr in enumerate(tbody.children):
+            if tr.children[0].children not in visited_feature_name:
+                visited_feature_name.append(tr.children[0].children)
+                tr.children[0].rowSpan = maximum_depth
+            else:
+                tr.children.pop(0)
+        return table
+
+    return []
 
 
 ####################################################

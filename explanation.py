@@ -87,15 +87,15 @@ def get_root_children_list(df):
     return list(df[df['Parent_Name'] == root_name]['Name'].values)
 
 
-if __name__ == '__main__':
-    df = pd.read_csv("MCTS_test_0.csv", sep='\t')
+def generate_game_feature_explanation_df(df):
     immediate, depth = game_feature_difference_explanation(df)
 
     table_df = {}
-
-    # {(node_name, change_name): {(feature, depth): change_count}}
+    feature_order = []
 
     for node, summary in immediate.items():
+        if not feature_order:
+            feature_order = list(summary.keys())
         change_dict_higher = table_df.setdefault((node, "Higher"), {})
         change_dict_same = table_df.setdefault((node, "Same"), {})
         change_dict_lower = table_df.setdefault((node, "Lower"), {})
@@ -117,6 +117,14 @@ if __name__ == '__main__':
                 change_dict_same[(feature, depth)] = f"{changes['same'] / count_sum * 100:.2f}%"
                 change_dict_lower[(feature, depth)] = f"{changes['lower'] / count_sum * 100:.2f}%"
 
+    feature_order_dict = {name: idx for idx, name in enumerate(feature_order)}
 
-    print(pd.DataFrame.from_dict(table_df))
+    table_df = pd.DataFrame.from_dict(table_df)
+    table_df.sort_index(inplace=True, key=lambda x: [i if type(i) == int else 0 for i in x], level=1)
+    table_df.sort_index(inplace=True, key=lambda x: [feature_order_dict[i] for i in x], level=0, sort_remaining=False)
+    table_df.index.names = ['Name', 'Depth']
+
+    maximum_depth = table_df[table_df.index.get_level_values('Name') == feature_order[0]].index[-1][1]
+
+    return table_df, maximum_depth
 
