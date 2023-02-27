@@ -14,6 +14,13 @@ def get_attributes(df):
     return sorted(df.columns.tolist())
 
 
+def get_root_actions(df, exclude_best=True):
+    root_node = df[df['Parent_Name'] == 'None'].iloc[0]
+    children = list(df[df['Parent_Name'] == root_node['Name']]['Action_Name'].values)
+    if exclude_best:
+        children.remove(root_node['Best_Action'])
+    return children
+
 def check_validity(filename):
     df = pd.read_csv(filename, sep="\t")
     for attribute in BASIC_ATTRIBUTE:

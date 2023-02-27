@@ -234,7 +234,8 @@ path_feature_col_config = html.Div([
 path_type_config = html.Div([
     dbc.Label("Type", html_for='path_type', class_name='mb-1'),
     dbc.Select(id='path_type',
-               options=['Best path vs Worse path', 'Best action vs Second best action', 'Best action vs another action'],
+               options=['Best path vs Worse path', 'Best action vs Second best action',
+                        'Best action vs another action'],
                value='Best path vs Worse path')
 ], className='py-1')
 
@@ -318,10 +319,35 @@ app.layout = html.Div([
 ####################################################
 @app.callback(
     Output(component_id='path_action_name_div', component_property='hidden'),
-    Input(component_id='path_type', component_property='value')
+    Output(component_id='path_action_name', component_property='options'),
+    Output(component_id='path_action_name', component_property='value'),
+    Input(component_id='path_type', component_property='value'),
+    State(component_id='dataframe', component_property='data')
 )
-def hidden_action_name_config(path_type):
-    return path_type != 'Best action vs another action'
+def hidden_action_name_config(path_type, df):
+    is_hidden = path_type != 'Best action vs another action'
+
+    if not is_hidden:
+        df = pd.read_json(df)
+        children = tree_visualization.get_root_actions(df)
+        return is_hidden, children, children[0]
+
+    return is_hidden, [], None
+
+
+@app.callback(
+    Output(component_id='path_exclude_features', component_property='options'),
+    Output(component_id='path_exclude_features', component_property='value'),
+    Input(component_id='path_feature_column', component_property='value'),
+    State(component_id='dataframe', component_property='data')
+)
+def set_path_exclude_features(feature_col, df):
+    if df is None or feature_col is None:
+        return [], []
+    df = pd.read_json(df)
+    feature_list = list(json.loads(df.iloc[0][feature_col]).keys())
+    return feature_list, []
+
 
 @app.callback(
     Output(component_id='game_feature_explanation', component_property='children'),
