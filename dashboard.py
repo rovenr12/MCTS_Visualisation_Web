@@ -221,15 +221,75 @@ selected_node_info_card = html.Div(dbc.Card([
 ####################################################
 # Game Feature Explanation
 game_feature_explanation = dbc.Card([
-    dbc.CardHeader(html.P("Game Features", className='m-0 fw-bold text-center text-primary'), class_name='py-3'),
-    dbc.CardBody(id='game_feature_explanation'),
+    dbc.CardBody(id='game_feature_explanation')
 ], class_name='my-2')
+
+# feature column config
+path_feature_col_config = html.Div([
+    dbc.Label("Features Column Name", html_for='path_feature_column', class_name='mb-1'),
+    dbc.Select(id='path_feature_column', options=[])
+], className='py-1')
+
+# type config
+path_type_config = html.Div([
+    dbc.Label("Type", html_for='path_type', class_name='mb-1'),
+    dbc.Select(id='path_type',
+               options=['Best path vs Worse path', 'Best action vs Second best action', 'Best action vs another action'],
+               value='Best path vs Worse path')
+], className='py-1')
+
+# action name config
+path_action_name_config = html.Div([
+    dbc.Label("Compare Action Name", html_for='path_action_name', class_name='mb-1'),
+    dbc.Select(id='path_action_name', options=[])
+], className='py-1', hidden=True, id='path_action_name_div')
+
+# exclude features config
+exclude_features_config = html.Div([
+    dbc.Label("Exclude Features", html_for='path_exclude_features', class_name='mb-1'),
+    dcc.Dropdown(id='path_exclude_features', options=[], multi=True)
+], className='py-1')
+
+# generation button
+path_explanation_generation = html.Div([
+    dbc.Button("Generate", color="primary", id='path_explanation_generation')
+], className='d-grid pt-4 pb-3')
+
+path_configuration_card = dbc.Card([
+    dbc.CardHeader(html.P("Configuration", className='m-0 fw-bold text-center text-primary'), class_name='py-3'),
+    dbc.CardBody([
+        path_feature_col_config,
+        path_type_config,
+        path_action_name_config,
+        exclude_features_config,
+        path_explanation_generation
+    ], id='path_configuration_card')
+], class_name='my-2')
+
+path_explanation_card = dbc.Card([
+    dbc.CardHeader(html.P("Explanation", className='m-0 fw-bold text-center text-primary'), class_name='py-3'),
+    dbc.CardBody(id='path_explanation_card')
+], class_name='my-2')
+
+path_explanation = dbc.Card([
+    dbc.CardBody(dbc.Container([
+        dbc.Row([
+            dbc.Col(path_configuration_card, lg='4', md='12'),
+            dbc.Col(path_explanation_card, lg='8', md='12')
+        ], class_name='g-3 mb-4 px-3')
+    ]), id='path_explanation')
+], class_name='my-2')
+
+explanation_tabs = dbc.Tabs([
+    dbc.Tab(game_feature_explanation, label='Game Features'),
+    dbc.Tab(path_explanation, label='Path')
+])
 
 explanation_card = html.Div(dbc.Card([
     dbc.CardHeader(html.H4("Root Action Explanation", className='m-0 fw-bold text-center text-primary'),
                    class_name='py-3'),
     dbc.CardBody([
-        game_feature_explanation
+        explanation_tabs
     ], style={'height': '700px', 'overflow-x': 'hidden', 'overflow-y': 'auto'})
 ], className='h-100'), id='root_action_explanation', hidden=True, className='my-2 shadow h-100')
 
@@ -257,6 +317,13 @@ app.layout = html.Div([
 # Explanation Callback
 ####################################################
 @app.callback(
+    Output(component_id='path_action_name_div', component_property='hidden'),
+    Input(component_id='path_type', component_property='value')
+)
+def hidden_action_name_config(path_type):
+    return path_type != 'Best action vs another action'
+
+@app.callback(
     Output(component_id='game_feature_explanation', component_property='children'),
     Input(component_id='root_action_explanation', component_property='hidden'),
     Input(component_id='visit_threshold', component_property='value'),
@@ -267,6 +334,10 @@ def update_game_feature_explanation(hidden, visit_threshold, df):
         return []
 
     df = pd.read_json(df)
+
+    if 'Game_Features' not in df.columns:
+        return dbc.Alert("Not Available. Required Game_Features column.", color="info")
+
     if visit_threshold:
         df = df[df['Visits'] >= visit_threshold]
 
@@ -638,12 +709,14 @@ def create_visit_threshold_placeholder(max_val):
     Output(component_id='legend', component_property='value'),
     Output(component_id='visit_threshold', component_property='max'),
     Output(component_id='visit_threshold', component_property='value'),
+    Output(component_id='path_feature_column', component_property='options'),
+    Output(component_id='path_feature_column', component_property='value'),
     Input(component_id='node_config', component_property='hidden'),
     State(component_id='dataframe', component_property='data')
 )
 def update_config_options(is_hidden, df):
     if is_hidden or not df:
-        return [], [], [], 'Depth', 1, 1
+        return [], [], [], 'Depth', 1, 1, [], None
 
     # Update Attributes
     df = pd.read_json(df)
@@ -657,8 +730,17 @@ def update_config_options(is_hidden, df):
     legend_attributes, _ = tree_visualization.get_legend_attributes(df)
     legend_options = create_select_options(legend_attributes)
 
+    path_attributes = tree_visualization.get_json_data_attribute_list(df)
+    path_options = create_select_options(path_attributes)
+    path_value = path_attributes[0]
+
+    if 'Game_Features' in path_attributes:
+        path_value = 'Game_Features'
+    elif 'Game_State' in path_attributes:
+        path_value = 'Game_State'
+
     visit_maximum = df['Visits'].max()
-    return hover_options, [], legend_options, 'Depth', visit_maximum, 1
+    return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value
 
 
 ####################################################
