@@ -1,17 +1,17 @@
 import base64
 import os.path
-
 import similarity
 from dash import Dash, html, dcc, Input, Output, State, ALL, ctx
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
 import tree_visualization
-import explanation
+import feature_explanation
+import path_explanation
 import plotly.graph_objects as go
 import json
 import pandas as pd
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], title='MCTS Dashboard')
 load_figure_template("BOOTSTRAP")
 
 DISTANCE_SIMILARITY_METHODS = list(similarity.distance_similarity_function_dict.keys())
@@ -272,7 +272,7 @@ path_explanation_card = dbc.Card([
     dbc.CardBody(id='path_explanation_card')
 ], class_name='my-2')
 
-path_explanation = dbc.Card([
+path_explanation_contents = dbc.Card([
     dbc.CardBody(dbc.Container([
         dbc.Row([
             dbc.Col(path_configuration_card, lg='4', md='12'),
@@ -283,7 +283,7 @@ path_explanation = dbc.Card([
 
 explanation_tabs = dbc.Tabs([
     dbc.Tab(game_feature_explanation, label='Game Features'),
-    dbc.Tab(path_explanation, label='Path')
+    dbc.Tab(path_explanation_contents, label='Path')
 ])
 
 explanation_card = html.Div(dbc.Card([
@@ -317,6 +317,35 @@ app.layout = html.Div([
 ####################################################
 # Explanation Callback
 ####################################################
+@app.callback(
+    Output('path_explanation_card', 'children'),
+    Input(component_id='path_explanation_generation', component_property='n_clicks'),
+    State('path_feature_column', 'value'),
+    State('path_type', 'value'),
+    State('path_action_name', 'value'),
+    State('path_exclude_features', 'value'),
+    State(component_id='dataframe', component_property='data')
+)
+def generate_explanation(n_clicks, feature_col, path_type, action_name, exclude_features, df):
+    if n_clicks == 0 or df is None:
+        return []
+
+    if feature_col is None:
+        return dbc.Alert("Not Available. Required game features specified.", color="info")
+
+    df = pd.read_json(df)
+    explanations = []
+
+    if path_type == 'Best path vs Worse path':
+        explanations = path_explanation.explanation_by_paths(df, feature_col, exclude_features)
+    elif path_type == 'Best action vs Second best action':
+        explanations = path_explanation.counterfactual_explanation_by_paths(df, None, exclude_features, feature_col)
+    elif path_type == 'Best action vs another action':
+        explanations = path_explanation.counterfactual_explanation_by_paths(df, action_name, exclude_features, feature_col)
+
+    return ' '.join(explanations)
+
+
 @app.callback(
     Output(component_id='path_action_name_div', component_property='hidden'),
     Output(component_id='path_action_name', component_property='options'),
@@ -367,9 +396,9 @@ def update_game_feature_explanation(hidden, visit_threshold, df):
     if visit_threshold:
         df = df[df['Visits'] >= visit_threshold]
 
-    root_action_list = explanation.get_root_children_list(df)
+    root_action_list = feature_explanation.get_root_children_list(df)
     if root_action_list:
-        table_df, maximum_depth = explanation.generate_game_feature_explanation_df(df)
+        table_df, maximum_depth = feature_explanation.generate_game_feature_explanation_df(df)
         maximum_depth += 1
         table = dbc.Table.from_dataframe(table_df, bordered=True, hover=True, index=True,
                                          responsive=True, class_name='align-middle text-center')
@@ -756,14 +785,13 @@ def update_config_options(is_hidden, df):
     legend_attributes, _ = tree_visualization.get_legend_attributes(df)
     legend_options = create_select_options(legend_attributes)
 
-    path_attributes = tree_visualization.get_json_data_attribute_list(df)
+    path_attributes = tree_visualization.get_numerical_only_json_data_attribute_list(df)
+
     path_options = create_select_options(path_attributes)
-    path_value = path_attributes[0]
+    path_value = None
 
     if 'Game_Features' in path_attributes:
         path_value = 'Game_Features'
-    elif 'Game_State' in path_attributes:
-        path_value = 'Game_State'
 
     visit_maximum = df['Visits'].max()
     return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value
@@ -784,7 +812,7 @@ def update_config_options(is_hidden, df):
     Input('upload_data', 'contents'),
     State('upload_data', 'filename')
 )
-def upload_and_save_file(content, file_name):
+def upload_file(content, file_name):
     if content:
         # Save the file
         data = content.encode("utf8").split(b";base64,")[1]
@@ -802,11 +830,11 @@ def upload_and_save_file(content, file_name):
 
         df = pd.read_csv(filename, sep="\t")
         alert = dbc.Alert(f"{file_name} has uploaded successfully!!", color="success", dismissable=True)
-
+        os.remove(filename)
         return alert, False, False, False, False, None, filename, df.to_json()
 
     return "", True, True, True, True, None, None, None
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run(debug=True)

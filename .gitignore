@@ -5,3 +5,5 @@ cache-directory
 Connect4
 DotsAndBoxes
 Connect4_RHEA
+.DS_Store
+__pycache__

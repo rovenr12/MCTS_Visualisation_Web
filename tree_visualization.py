@@ -130,6 +130,21 @@ def get_json_data_attribute_list(df):
     return json_attribute_list
 
 
+def get_numerical_only_json_data_attribute_list(df):
+    consideration_list = get_json_data_attribute_list(df)
+    attribute_list = []
+    for attribute in consideration_list:
+        data = json.loads(str(df[attribute].values[:1][0]))
+        is_numerical = True
+        for _, val in data.items():
+            if type(val) not in [int, float]:
+                is_numerical = False
+                break
+        if is_numerical:
+            attribute_list.append(attribute)
+    return attribute_list
+
+
 def generate_network(df):
     dag = nx.from_pandas_edgelist(df, source='Name', target='Parent_Name')
     dag.remove_node("None")

@@ -15,8 +15,10 @@ def get_children_in_depth(df, depth, key, children_in_depth_dict):
     return get_children_in_depth(df, depth + 1, key, children_in_depth_dict)
 
 
-def get_feature_difference_count(df, base_action_name, action_lists, rel_tol=0.001):
-    base_game_feature = df[df['Name'] == base_action_name]['Game_Features'].values[0]
+def get_feature_difference_count(df, base_action_name, action_lists, rel_tol=0.001,
+                                 state_col='Game_Features', exclude_features=None):
+
+    base_game_feature = df[df['Name'] == base_action_name][state_col].values[0]
     base_game_feature = pd.json_normalize(json.loads(base_game_feature))
 
     game_feature_summary = {}
