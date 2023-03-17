@@ -21,6 +21,7 @@ def get_root_actions(df, exclude_best=True):
         children.remove(root_node['Best_Action'])
     return children
 
+
 def check_validity(filename):
     df = pd.read_csv(filename, sep="\t")
     for attribute in BASIC_ATTRIBUTE:
@@ -295,6 +296,8 @@ def generate_visit_threshold_network(df, threshold, hovertext=None, legend=None)
     if legend:
         fig = update_legend(fig, df, legend)
 
+    update_marker_symbols(fig)
+
     return fig
 
 
@@ -332,4 +335,13 @@ def update_legend(fig, df, legend_name, visit_threshold=None):
         colorscale = "bluered"
 
     fig.data[1].update(marker={"color": color, "colorscale": colorscale, "colorbar": colorbar})
+    return fig
+
+
+def update_marker_symbols(fig, markers_dict=None):
+    # update root node
+    fig = get_figure_object(fig)
+    custom_data = fig.data[1]['customdata']
+    symbols = ["circle" if i['Parent_Name'] != "None" else "circle-x" for i in custom_data]
+    fig.data[1].update(marker={"symbol": symbols})
     return fig
