@@ -320,13 +320,13 @@ app.layout = html.Div([
 @app.callback(
     Output('path_explanation_card', 'children'),
     Input(component_id='path_explanation_generation', component_property='n_clicks'),
+    Input(component_id='dataframe', component_property='data'),
     State('path_feature_column', 'value'),
     State('path_type', 'value'),
     State('path_action_name', 'value'),
-    State('path_exclude_features', 'value'),
-    State(component_id='dataframe', component_property='data')
+    State('path_exclude_features', 'value')
 )
-def generate_explanation(n_clicks, feature_col, path_type, action_name, exclude_features, df):
+def generate_explanation(n_clicks, df, feature_col, path_type, action_name, exclude_features):
     if n_clicks == 0 or df is None:
         return []
 
@@ -351,7 +351,7 @@ def generate_explanation(n_clicks, feature_col, path_type, action_name, exclude_
     Output(component_id='path_action_name', component_property='options'),
     Output(component_id='path_action_name', component_property='value'),
     Input(component_id='path_type', component_property='value'),
-    State(component_id='dataframe', component_property='data')
+    Input(component_id='dataframe', component_property='data')
 )
 def hidden_action_name_config(path_type, df):
     is_hidden = path_type != 'Best action vs another action'
@@ -368,7 +368,7 @@ def hidden_action_name_config(path_type, df):
     Output(component_id='path_exclude_features', component_property='options'),
     Output(component_id='path_exclude_features', component_property='value'),
     Input(component_id='path_feature_column', component_property='value'),
-    State(component_id='dataframe', component_property='data')
+    Input(component_id='dataframe', component_property='data')
 )
 def set_path_exclude_features(feature_col, df):
     if df is None or feature_col is None:
@@ -766,12 +766,13 @@ def create_visit_threshold_placeholder(max_val):
     Output(component_id='visit_threshold', component_property='value'),
     Output(component_id='path_feature_column', component_property='options'),
     Output(component_id='path_feature_column', component_property='value'),
+    Output(component_id='path_explanation_generation', component_property='n_clicks'),
     Input(component_id='node_config', component_property='hidden'),
     State(component_id='dataframe', component_property='data')
 )
 def update_config_options(is_hidden, df):
     if is_hidden or not df:
-        return [], [], [], 'Depth', 1, 1, [], None
+        return [], [], [], 'Depth', 1, 1, [], None, 0
 
     # Update Attributes
     df = pd.read_json(df)
@@ -794,7 +795,7 @@ def update_config_options(is_hidden, df):
         path_value = 'Game_Features'
 
     visit_maximum = df['Visits'].max()
-    return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value
+    return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value, 0
 
 
 ####################################################
