@@ -5,6 +5,7 @@ from dash import Dash, html, dcc, Input, Output, State, ALL, ctx
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
 import tree_visualization
+import data_preprocessing
 import feature_explanation
 import path_explanation
 import plotly.graph_objects as go
@@ -90,11 +91,26 @@ visit_threshold_config = html.Div([
     dbc.FormText('Type number between 1 to 20', id='visit_threshold_form_text')
 ], className='py-1')
 
+# custom symbols layout
+add_symbol = dbc.Row([
+    dbc.Col(dbc.Select(id='custom_symbol_attribute'), width=5, class_name="pe-0"),
+    dbc.Col(dbc.Select(id='custom_symbol_selection'), width=4, class_name="ps-0"),
+    dbc.Col(dbc.Button("+", id='custom_symbol_button'), width=3)
+], class_name='py-1')
+
+custom_symbols = html.Div([
+    html.P("Custom Node Symbols"),
+    html.Div(add_symbol, id='custom_symbol_add_div'),
+    html.Div(id="selected_custom_symbols_div"),
+    dcc.Store(data=[], id="selected_custom_symbols")
+], id='custom_symbols')
+
 # node configuration layout
 node_configuration = html.Div([
     hover_text_config,
     legend_config,
-    visit_threshold_config
+    visit_threshold_config,
+    custom_symbols
 ], id='node_config', hidden=True, className='py-1')
 
 # configuration card layout
@@ -341,7 +357,8 @@ def generate_explanation(n_clicks, df, feature_col, path_type, action_name, excl
     elif path_type == 'Best action vs Second best action':
         explanations = path_explanation.counterfactual_explanation_by_paths(df, None, exclude_features, feature_col)
     elif path_type == 'Best action vs another action':
-        explanations = path_explanation.counterfactual_explanation_by_paths(df, action_name, exclude_features, feature_col)
+        explanations = path_explanation.counterfactual_explanation_by_paths(df, action_name, exclude_features,
+                                                                            feature_col)
 
     return ' '.join(explanations)
 
@@ -396,12 +413,24 @@ def update_game_feature_explanation(hidden, visit_threshold, df):
     if visit_threshold:
         df = df[df['Visits'] >= visit_threshold]
 
-    root_action_list = feature_explanation.get_root_children_list(df)
+    root_action_list = data_preprocessing.get_root_available_actions(df)
     if root_action_list:
         table_df, maximum_depth = feature_explanation.generate_game_feature_explanation_df(df)
         maximum_depth += 1
         table = dbc.Table.from_dataframe(table_df, bordered=True, hover=True, index=True,
                                          responsive=True, class_name='align-middle text-center')
+
+        thead = table.children[0]
+        first_tr = thead.children[0]
+        first_tr.children[0].rowSpan = 2
+        first_tr.children[0].className = "align-middle"
+        first_tr.children[1].rowSpan = 2
+        first_tr.children[1].className = "align-middle"
+        second_tr = thead.children[1]
+        second_tr.children.pop(0)
+        second_tr.children.pop(0)
+
+
         tbody = table.children[1]
         tbody.className = " table-group-divider"
 
@@ -438,7 +467,7 @@ def update_node_information(hidden, df, selected_node):
     for attribute in attributes:
         if attribute == 'Name':
             continue
-        elif attribute in tree_visualization.get_json_data_attribute_list(df):
+        elif attribute in tree_visualization.get_json_data_attributes(df):
             game_state_json = json.loads(selected_node[attribute])
             list_group = dbc.ListGroup(children=[])
             json_content_builder(game_state_json, list_group)
@@ -468,7 +497,7 @@ def update_node_similar_game_feature_layout(hidden, df):
     if 'Game_Features' not in df.columns:
         return True, False
 
-    if 'Game_Features' not in tree_visualization.get_json_data_attribute_list(df):
+    if 'Game_Features' not in tree_visualization.get_json_data_attributes(df):
         return True, False
 
     return False, True
@@ -715,13 +744,14 @@ def update_graph_alert(_, figure):
     Input(component_id='legend', component_property='value'),
     Input(component_id='visit_threshold', component_property='value'),
     Input(component_id='select_node_info', component_property='hidden'),
+    Input(component_id="selected_custom_symbols", component_property='data'),
     State(component_id='tree_visualisation_graph', component_property='figure'),
     State(component_id='filename', component_property='data'),
     State(component_id='figure_filename', component_property='data'),
     State(component_id='dataframe', component_property='data'),
     State(component_id='selected_node_custom_data', component_property='data')
 )
-def update_tree_visualization(hover_text, legend, visit_threshold, _, fig,
+def update_tree_visualization(hover_text, legend, visit_threshold, _, custom_symbol_list, fig,
                               filename, figure_filename, df, selected_node):
     if not filename:
         return go.Figure(), None
@@ -730,7 +760,8 @@ def update_tree_visualization(hover_text, legend, visit_threshold, _, fig,
     if ctx.triggered_id == 'visit_threshold' or filename != figure_filename:
         if not visit_threshold:
             visit_threshold = 1
-        return tree_visualization.generate_visit_threshold_network(df, visit_threshold, hover_text, legend), filename
+        return tree_visualization.generate_visit_threshold_network(df, visit_threshold, hover_text, legend,
+                                                                   custom_symbol_list), filename
 
     if ctx.triggered_id == "select_node_info" and selected_node:
         return tree_visualization.highlight_selected_node(fig, selected_node['Name']), figure_filename
@@ -740,6 +771,9 @@ def update_tree_visualization(hover_text, legend, visit_threshold, _, fig,
 
     if ctx.triggered_id == "legend":
         return tree_visualization.update_legend(fig, df, legend, visit_threshold), figure_filename
+
+    if ctx.triggered_id == "selected_custom_symbols":
+        return tree_visualization.update_marker_symbols(fig, custom_symbol_list), figure_filename
 
     return fig, figure_filename
 
@@ -756,6 +790,108 @@ def create_visit_threshold_placeholder(max_val):
     return f'Type number between 1 and {max_val}'
 
 
+# add_symbol = dbc.Row([
+#     dbc.Col(dbc.Select(id='custom_symbol_attribute'), width=5, class_name="pe-0"),
+#     dbc.Col(dbc.Select(id='custom_symbol_selection'), width=4, class_name="ps-0"),
+#     dbc.Col(dbc.Button("add", id='custom_symbol_button'), width=3)
+# ])
+#
+# custom_symbols = html.Div([
+#     html.P("Custom Node Symbols"),
+#     html.Div(add_symbol, id='custom_symbol_add_div'),
+#     html.Div(id="selected_custom_symbols_div"),
+#     dcc.Store(id="selected_custom_symbols")
+# ], id='custom_symbols')
+# id={'type': 'children_button', 'index': idx}
+# show selected custom symbols list
+@app.callback(
+    Output(component_id="selected_custom_symbols_div", component_property="children"),
+    Input(component_id='selected_custom_symbols', component_property='data'),
+)
+def update_custom_symbols_configuration(selected_custom_symbols_list):
+    if not selected_custom_symbols_list:
+        return []
+
+    children = []
+    for idx, (attribute, symbol) in enumerate(selected_custom_symbols_list):
+        children.append(dbc.Row([
+            dbc.Col(f"{attribute}: {symbol}", width=9),
+            dbc.Col(dbc.Button("-", id={'type': 'remove_custom_symbol_button', 'index': idx}), width=3),
+        ], class_name='py-1'))
+
+    return children
+
+
+# show custom symbols configuration when it is available
+@app.callback(
+    Output(component_id="custom_symbols", component_property="hidden"),
+    Input(component_id='custom_symbol_add_div', component_property='hidden'),
+    Input(component_id='selected_custom_symbols', component_property='data'),
+)
+def update_custom_symbols_configuration(add_hidden, selected_custom_symbols_list):
+    if not add_hidden:
+        return False
+
+    if selected_custom_symbols_list is None or len(selected_custom_symbols_list) == 0:
+        return True
+
+    return False
+
+
+# update add custom symbols configuration
+@app.callback(
+    Output(component_id='custom_symbol_attribute', component_property='options'),
+    Output(component_id='custom_symbol_selection', component_property='options'),
+    Output(component_id='custom_symbol_attribute', component_property='value'),
+    Output(component_id='custom_symbol_selection', component_property='value'),
+    Output(component_id='custom_symbol_add_div', component_property='hidden'),
+    Input(component_id="selected_custom_symbols", component_property='data'),
+    State(component_id="dataframe", component_property="data")
+)
+def update_add_custom_symbol_configuration(selected_custom_symbols_list, df):
+    if not df:
+        return [], [], None, None, True
+
+    df = pd.read_json(df)
+
+    available_attributes = tree_visualization.get_binary_attributes(df)
+    available_symbols = tree_visualization.CUSTOM_SYMBOL_LIST.copy()
+
+    if selected_custom_symbols_list:
+        for selected_attribute, symbol in selected_custom_symbols_list:
+            available_attributes.remove(selected_attribute)
+            available_symbols.remove(symbol)
+
+    if len(available_attributes) == 0:
+        return [], [], None, None, True
+
+    return available_attributes, available_symbols, None, None, False
+
+
+# update custom symbol data
+@app.callback(
+    Output(component_id="selected_custom_symbols", component_property='data'),
+    Input(component_id="custom_symbol_button", component_property="n_clicks"),
+    Input(component_id={'type': 'remove_custom_symbol_button', 'index': ALL}, component_property='n_clicks'),
+    State(component_id="selected_custom_symbols", component_property='data'),
+    State(component_id='custom_symbol_attribute', component_property='value'),
+    State(component_id='custom_symbol_selection', component_property='value'),
+)
+def update_custom_symbol_dict(n_clicks, _, selected_custom_symbols_list, attribute, symbol):
+    if ctx.triggered_id == 'custom_symbol_button':
+        if not n_clicks:
+            return []
+
+        if not attribute or not symbol:
+            return selected_custom_symbols_list
+
+        selected_custom_symbols_list.append((attribute, symbol))
+        return selected_custom_symbols_list
+    else:
+        selected_custom_symbols_list.pop(ctx.triggered_id['index'])
+        return selected_custom_symbols_list
+
+
 # Update configuration
 @app.callback(
     Output(component_id='hover_text', component_property='options'),
@@ -767,12 +903,13 @@ def create_visit_threshold_placeholder(max_val):
     Output(component_id='path_feature_column', component_property='options'),
     Output(component_id='path_feature_column', component_property='value'),
     Output(component_id='path_explanation_generation', component_property='n_clicks'),
+    Output(component_id='custom_symbol_button', component_property='n_clicks'),
     Input(component_id='node_config', component_property='hidden'),
     State(component_id='dataframe', component_property='data')
 )
 def update_config_options(is_hidden, df):
     if is_hidden or not df:
-        return [], [], [], 'Depth', 1, 1, [], None, 0
+        return [], [], [], 'Depth', 1, 1, [], None, 0, 0
 
     # Update Attributes
     df = pd.read_json(df)
@@ -786,7 +923,7 @@ def update_config_options(is_hidden, df):
     legend_attributes, _ = tree_visualization.get_legend_attributes(df)
     legend_options = create_select_options(legend_attributes)
 
-    path_attributes = tree_visualization.get_numerical_only_json_data_attribute_list(df)
+    path_attributes = tree_visualization.get_numerical_only_json_data_attributes(df)
 
     path_options = create_select_options(path_attributes)
     path_value = None
@@ -795,7 +932,7 @@ def update_config_options(is_hidden, df):
         path_value = 'Game_Features'
 
     visit_maximum = df['Visits'].max()
-    return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value, 0
+    return hover_options, [], legend_options, 'Depth', visit_maximum, 1, path_options, path_value, 0, 0
 
 
 ####################################################

@@ -8,10 +8,53 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 BASIC_ATTRIBUTE = ["Name", "Parent_Name", "Depth", "Value", "Visits"]
+CUSTOM_SYMBOL_LIST = ['circle-open', 'circle-dot', 'circle-open-dot',
+                      'square', 'square-open', 'square-dot', 'square-open-dot',
+                      'diamond', 'diamond-open', 'diamond-dot', 'diamond-open-dot',
+                      'x', 'x-open', 'x-dot', 'x-open-dot',
+                      'star', 'star-open', 'star-dot', 'star-open-dot']
 
 
 def get_attributes(df):
     return sorted(df.columns.tolist())
+
+
+def get_binary_attributes(df):
+    binary_features = []
+    for col in df.columns:
+        if {0, 1} == set(df[col].unique()):
+            binary_features.append(col)
+    return binary_features
+
+
+def get_json_data_attributes(df):
+    json_attribute_list = []
+    attributes = get_attributes(df)
+    for attribute in attributes:
+        try:
+            test_data = str(df[attribute].values[:1][0])
+            if not test_data.startswith("{"):
+                continue
+            json.loads(test_data)
+        except ValueError:
+            continue
+        json_attribute_list.append(attribute)
+    return json_attribute_list
+
+
+def get_numerical_only_json_data_attributes(df):
+    consideration_list = get_json_data_attributes(df)
+    attribute_list = []
+    for attribute in consideration_list:
+        data = json.loads(str(df[attribute].values[:1][0]))
+        is_numerical = True
+        for _, val in data.items():
+            if type(val) not in [int, float]:
+                is_numerical = False
+                break
+        if is_numerical:
+            attribute_list.append(attribute)
+    return attribute_list
 
 
 def get_root_actions(df, exclude_best=True):
@@ -101,7 +144,8 @@ def search_similar_node_by_children_action(df, visit_threshold, node_name, simil
         if node == node_name:
             continue
 
-        value = similarity.set_similarity_function_dict[similarity_method](children_dict[node_name], children_dict[node])
+        value = similarity.set_similarity_function_dict[similarity_method](children_dict[node_name],
+                                                                           children_dict[node])
         if value >= threshold:
             similarities[node] = value
 
@@ -114,36 +158,6 @@ def search_similar_node_by_children_action(df, visit_threshold, node_name, simil
 def search_children(df, visit_threshold, node_name):
     df = df[df['Visits'] >= visit_threshold]
     return df[df['Parent_Name'] == node_name]['Name'].tolist()
-
-
-def get_json_data_attribute_list(df):
-    json_attribute_list = []
-    attributes = get_attributes(df)
-    for attribute in attributes:
-        try:
-            test_data = str(df[attribute].values[:1][0])
-            if not test_data.startswith("{"):
-                continue
-            json.loads(test_data)
-        except ValueError:
-            continue
-        json_attribute_list.append(attribute)
-    return json_attribute_list
-
-
-def get_numerical_only_json_data_attribute_list(df):
-    consideration_list = get_json_data_attribute_list(df)
-    attribute_list = []
-    for attribute in consideration_list:
-        data = json.loads(str(df[attribute].values[:1][0]))
-        is_numerical = True
-        for _, val in data.items():
-            if type(val) not in [int, float]:
-                is_numerical = False
-                break
-        if is_numerical:
-            attribute_list.append(attribute)
-    return attribute_list
 
 
 def generate_network(df):
@@ -225,7 +239,7 @@ def update_hover_text(fig, df, hover_template_attributes=None):
 def get_legend_attributes(df):
     legend_list = df.select_dtypes([np.number]).columns.tolist()
     object_type_legend_list = []
-    json_attributes = get_json_data_attribute_list(df)
+    json_attributes = get_json_data_attributes(df)
     for i in df.select_dtypes(exclude=[np.number]).columns:
         if i not in json_attributes and i not in ["Name", "Parent_Name"]:
             if len(df[i].unique()) < 24:
@@ -285,7 +299,7 @@ def generate_fig(graph, df):
     return fig
 
 
-def generate_visit_threshold_network(df, threshold, hovertext=None, legend=None):
+def generate_visit_threshold_network(df, threshold, hovertext=None, legend=None, custom_symbols=None):
     df = df[df['Visits'] >= threshold]
 
     fig = generate_fig(generate_network(df), df)
@@ -296,7 +310,7 @@ def generate_visit_threshold_network(df, threshold, hovertext=None, legend=None)
     if legend:
         fig = update_legend(fig, df, legend)
 
-    update_marker_symbols(fig)
+    fig = update_marker_symbols(fig, custom_symbols)
 
     return fig
 
@@ -338,10 +352,29 @@ def update_legend(fig, df, legend_name, visit_threshold=None):
     return fig
 
 
-def update_marker_symbols(fig, markers_dict=None):
+def update_marker_symbols(fig, markers_list=None):
     # update root node
     fig = get_figure_object(fig)
     custom_data = fig.data[1]['customdata']
-    symbols = ["circle" if i['Parent_Name'] != "None" else "circle-x" for i in custom_data]
+
+    symbols = []
+
+    for data in custom_data:
+        if data['Parent_Name'] == "None":
+            symbols.append("circle-x")
+            continue
+
+        if markers_list:
+            has_find = False
+            for feature, symbol in markers_list[::-1]:
+                if data[feature] == 1:
+                    symbols.append(symbol)
+                    has_find = True
+                    break
+            if has_find:
+                continue
+
+        symbols.append("circle")
+
     fig.data[1].update(marker={"symbol": symbols})
     return fig
