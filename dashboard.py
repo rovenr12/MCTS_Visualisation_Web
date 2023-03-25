@@ -119,8 +119,8 @@ configuration_card = dbc.Card([
     dbc.CardBody([
         node_configuration,
         upload_file
-    ])
-], class_name='my-2 shadow h-100')
+    ], style={'overflow-y': 'auto'})
+], class_name='my-2 shadow', style={'height': '550px'})
 
 ####################################################
 # Tree Visualisation Layout
@@ -240,6 +240,8 @@ game_feature_explanation = dbc.Card([
     dbc.CardBody(id='game_feature_explanation')
 ], class_name='my-2')
 
+
+# Path Explanation
 # feature column config
 path_feature_col_config = html.Div([
     dbc.Label("Features Column Name", html_for='path_feature_column', class_name='mb-1'),
@@ -790,19 +792,6 @@ def create_visit_threshold_placeholder(max_val):
     return f'Type number between 1 and {max_val}'
 
 
-# add_symbol = dbc.Row([
-#     dbc.Col(dbc.Select(id='custom_symbol_attribute'), width=5, class_name="pe-0"),
-#     dbc.Col(dbc.Select(id='custom_symbol_selection'), width=4, class_name="ps-0"),
-#     dbc.Col(dbc.Button("add", id='custom_symbol_button'), width=3)
-# ])
-#
-# custom_symbols = html.Div([
-#     html.P("Custom Node Symbols"),
-#     html.Div(add_symbol, id='custom_symbol_add_div'),
-#     html.Div(id="selected_custom_symbols_div"),
-#     dcc.Store(id="selected_custom_symbols")
-# ], id='custom_symbols')
-# id={'type': 'children_button', 'index': idx}
 # show selected custom symbols list
 @app.callback(
     Output(component_id="selected_custom_symbols_div", component_property="children"),
